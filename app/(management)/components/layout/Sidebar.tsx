@@ -55,79 +55,15 @@ const Sidebar = () => {
                             </div>
                             <i className="fa-solid fa-chevron-right"></i>
                         </a>
-
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-tags w-5 text-center"></i>
-                                <span>Thuộc tính</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-box-open w-5 text-center"></i>
-                                <span>Sản phẩm</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
                     </div >
                 </section >
 
                 <section>
-                    <div className="space-y-1">
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-file-invoice w-5 text-center"></i>
-                                <span>Hóa đơn</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-clock-rotate-left w-5 text-center"></i>
-                                <span>Lịch sử hóa đơn</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
-                    </div>
+                    
                 </section>
 
                 <section>
                     <div className="space-y-1">
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-gear w-5 text-center"></i>
-                                <span>Hệ thống</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-bell w-5 text-center"></i>
-                                <span>Thông báo</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
-
-                        <a href="#"
-                            className="flex items-center justify-between px-3 py-2.5 text-sm font-medium transition">
-                            <div className="flex items-center gap-2">
-                                <i className="fa-solid fa-lock w-5 text-center"></i>
-                                <span>Bảo mật</span>
-                            </div>
-                            <i className="fa-solid fa-chevron-right"></i>
-                        </a>
 
                     </div>
                 </section>
