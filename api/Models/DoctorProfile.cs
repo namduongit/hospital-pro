@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using api.Enums;
 
 namespace api.Models;
 
 public class DoctorProfile
 {
+    [Key]
     public Guid Uuid { get; set; }
     public string Image { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -12,6 +14,8 @@ public class DoctorProfile
     public int Visit { get; set; } = 0;
     public string ViewDepartment { get; set; } = string.Empty;
     public bool IsFeatured { get; set; } = false;
+    public string Markdown { get; set; } = string.Empty;
+    public int ConsultationFee { get; set; } = 0;
 
     // Account 
     public Guid AccountUuid { get; set; }

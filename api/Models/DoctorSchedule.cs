@@ -1,7 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace api.Models;
 
 public class DoctorSchedule
 {
+    [Key]
     public Guid Uuid { get; set; }
 
     // Doctor

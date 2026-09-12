@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using api.Enums;
 
 namespace api.Models;
 
 public class Prescription
 {
+    [Key]
     public Guid Uuid { get; set; }
     public int TotalPrice { get; set; } = 0;
     public string Reason { get; set; } = string.Empty;

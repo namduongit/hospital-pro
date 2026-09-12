@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using api.Enums;
 
 namespace api.Models;
 
 public class Medicine
 {
+    [Key]
     public Guid Uuid { get; set; }
     public string Name { get; set; } = string.Empty;
     public string BarCode { get; set; } = string.Empty;

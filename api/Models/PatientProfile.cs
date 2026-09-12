@@ -1,9 +1,11 @@
+using System.ComponentModel.DataAnnotations;
 using api.Enums;
 
 namespace api.Models;
 
 public class PatientProfile
 {
+    [Key]
     public Guid Uuid { get; set; }
     public string Image { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
