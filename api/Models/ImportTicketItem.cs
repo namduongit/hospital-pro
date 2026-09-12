@@ -1,7 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace api.Models;
 
 public class ImportTicketItem
 {
+    [Key]
     public Guid Uuid { get; set; }
     public int Quantity { get; set; } = 0;
     public int Price { get; set; } = 0;

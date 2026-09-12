@@ -1,7 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace api.Models;
 
 public class ReviewDoctor
 {
+    [Key]
     public Guid Uuid { get; set; }
     public string Avatar { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;

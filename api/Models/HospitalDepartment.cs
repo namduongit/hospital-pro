@@ -1,7 +1,10 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace api.Models;
 
 public class HospitalDepartment
 {
+    [Key]
     public Guid Uuid { get; set; }
 
     // Hospital
