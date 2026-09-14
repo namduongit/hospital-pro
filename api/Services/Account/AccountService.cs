@@ -284,7 +284,71 @@ public class AccountService : IAccountService
         if (!string.IsNullOrEmpty(dto.Email)) account.Email = dto.Email;
         if (!string.IsNullOrEmpty(dto.Password)) account.Password = dto.Password;
         if (dto.Status.HasValue) account.Status = (AccountStatus)dto.Status.Value;
-        if (dto.RoleUuid.HasValue) account.RoleUuid = dto.RoleUuid.Value;
+
+        // Profile auto-migration when role changes
+        if (dto.RoleUuid.HasValue && dto.RoleUuid.Value != account.RoleUuid)
+        {
+            var oldRole = await _db.Roles.FindAsync(account.RoleUuid);
+            var newRole = await _db.Roles.FindAsync(dto.RoleUuid.Value)
+                ?? throw new Exception($"Role '{dto.RoleUuid.Value}' not found.");
+
+            var wasDoctor = oldRole?.IsDefault == true;
+            var willBeDoctor = newRole.IsDefault;
+
+            if (wasDoctor && !willBeDoctor)
+            {
+                // Doctor → Patient: delete DoctorProfile (+ deps), create PatientProfile
+                var dp = await _db.DoctorProfiles.FirstOrDefaultAsync(d => d.AccountUuid == accountId);
+                if (dp != null)
+                {
+                    var doctorDepartments = await _db.DoctorDepartments.Where(dd => dd.DoctorUuid == dp.Uuid).ToListAsync();
+                    var doctorSchedules = await _db.DoctorSchedules.Where(ds => ds.DoctorUuid == dp.Uuid).ToListAsync();
+                    _db.DoctorDepartments.RemoveRange(doctorDepartments);
+                    _db.DoctorSchedules.RemoveRange(doctorSchedules);
+                    _db.DoctorProfiles.Remove(dp);
+                }
+                _db.PatientProfiles.Add(new Models.PatientProfile
+                {
+                    Uuid = Guid.NewGuid(),
+                    Image = string.Empty,
+                    Name = account.Email,
+                    Gender = Gender.Other,
+                    Address = string.Empty,
+                    Phone = string.Empty,
+                    Email = account.Email,
+                    MedicalCode = string.Empty,
+                    AccountUuid = accountId,
+                });
+            }
+            else if (!wasDoctor && willBeDoctor)
+            {
+                // Patient → Doctor: delete PatientProfile, create DoctorProfile
+                var pp = await _db.PatientProfiles.FirstOrDefaultAsync(p => p.AccountUuid == accountId);
+                if (pp != null)
+                    _db.PatientProfiles.Remove(pp);
+
+                var defaultHospital = await _db.Hospitals.FirstOrDefaultAsync();
+                _db.DoctorProfiles.Add(new Models.DoctorProfile
+                {
+                    Uuid = Guid.NewGuid(),
+                    Image = string.Empty,
+                    Name = account.Email,
+                    Gender = Gender.Other,
+                    AverageStar = 5,
+                    Visit = 0,
+                    ViewDepartment = string.Empty,
+                    IsFeatured = false,
+                    Markdown = string.Empty,
+                    ConsultationFee = 0,
+                    AccountUuid = accountId,
+                    HospitalGuid = defaultHospital?.Uuid
+                        ?? throw new Exception("No hospital found. Create a hospital first."),
+                });
+            }
+            // Same type → no profile migration needed
+
+            account.RoleUuid = dto.RoleUuid.Value;
+        }
 
         _db.Accounts.Update(account);
         await _db.SaveChangesAsync();
