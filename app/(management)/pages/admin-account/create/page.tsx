@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { accountsApi, rolesApi, Role } from "@/lib/api";
+import { RoleItem } from "@/lib/role/IRole";
+import { Role } from "@/lib/role/Role";
+import { Account } from "@/lib/account/Account";
 
 const GENDER_LABEL = ["Khác", "Nam", "Nữ"];
 
@@ -22,7 +24,7 @@ export default function CreateAccountPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [roles, setRoles] = useState<RoleItem[]>([]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState(0);
@@ -53,7 +55,8 @@ export default function CreateAccountPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    rolesApi.getAll(1, 100).then((d) => setRoles(d.items)).catch(() => {});
+    const roleCls = new Role();
+    roleCls.GetAll(1, 100).then((d) => setRoles(d.items)).catch(() => {});
   }, []);
 
   const selectedRole = roles.find((r) => r.uuid === roleUuid);
@@ -83,7 +86,8 @@ export default function CreateAccountPage() {
     }
     setSubmitting(true);
     try {
-      await accountsApi.create({
+      const accountCls = new Account();
+      await accountCls.Create({
         email: email.trim(),
         password,
         status,

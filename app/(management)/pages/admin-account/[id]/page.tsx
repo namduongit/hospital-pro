@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { accountsApi, AccountDetail, UpdateDoctorProfilePayload } from "@/lib/api";
+import { Account } from "@/lib/account/Account";
+import { AccountDetail, UpdateDoctorProfilePayload } from "@/lib/account/IAccount";
+import { useToast } from "@/context/toast";
 
 const GENDER_LABEL = ["Khác", "Nam", "Nữ"];
 const ACCOUNT_STATUS = ["Hoạt động", "Không hoạt động"];
@@ -97,11 +99,10 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 export default function AdminAccountDetailPage() {
   const params = useParams<{ id: string }>();
-  const router = useRouter();
+  const toast = useToast();
   const [detail, setDetail] = useState<AccountDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   // Doctor markdown editing state
   const [markdown, setMarkdown] = useState("");
@@ -118,7 +119,8 @@ export default function AdminAccountDetailPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = await accountsApi.getDetail(params.id);
+      const accountCls = new Account();
+      const data = await accountCls.GetDetail(params.id);
       setDetail(data);
       if (data.doctorProfile) {
         setMarkdown(data.doctorProfile.markdown);
@@ -140,11 +142,6 @@ export default function AdminAccountDetailPage() {
     fetchDetail();
   }, [params.id]);
 
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2500);
-  };
-
   const saveDoctorProfile = async () => {
     if (!params.id) return;
     setSavingDoctor(true);
@@ -158,11 +155,12 @@ export default function AdminAccountDetailPage() {
         markdown,
         consultationFee,
       };
-      await accountsApi.updateDoctorProfile(params.id, payload);
-      showToast("Đã lưu thông tin bác sĩ");
+      const accountCls = new Account();
+      await accountCls.UpdateDoctorProfile(params.id, payload);
+      toast?.ShowToast("Đã lưu thông tin bác sĩ");
       fetchDetail();
     } catch (e: unknown) {
-      showToast(e instanceof Error ? e.message : "Lưu thất bại");
+      toast?.ShowToast(e instanceof Error ? e.message : "Lưu thất bại");
     } finally {
       setSavingDoctor(false);
     }
@@ -521,12 +519,6 @@ export default function AdminAccountDetailPage() {
           )}
         </div>
       </div>
-
-      {toast && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-lg bg-gray-900 px-4 py-3 text-sm text-white shadow-lg">
-          {toast}
-        </div>
-      )}
     </div>
   );
 }

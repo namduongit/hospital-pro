@@ -25,16 +25,10 @@ public class AccountService : IAccountService
 
     public async Task<Pagination<AccountResponseDto>> GetAllAccountsAsync(int page = 1, int pageSize = 10)
     {
-        var query = _db.Accounts
-            .Include(a => a.Role)
-            .Include(a => a.PatientProfile)
-            .Include(a => a.DoctorProfile)
-            .AsQueryable();
-
-        var totalCount = await query.CountAsync();
+        var totalCount = await _db.Accounts.CountAsync();
         var totalPage = (int)Math.Ceiling(totalCount / (double)pageSize);
 
-        var items = await query
+        var items = await _db.Accounts
             .OrderByDescending(a => a.Uuid)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -62,10 +56,12 @@ public class AccountService : IAccountService
 
     public async Task<AccountDetailDto> GetAccountDetailAsync(Guid accountId)
     {
+        // 1. Account — simple query, no Include
         var a = await _db.Accounts
-            .Include(x => x.Role)
             .FirstOrDefaultAsync(x => x.Uuid == accountId)
             ?? throw new Exception($"Account '{accountId}' not found.");
+
+        var role = await _db.Roles.FirstOrDefaultAsync(r => r.Uuid == a.RoleUuid);
 
         var dto = new AccountDetailDto
         {
@@ -73,11 +69,11 @@ public class AccountService : IAccountService
             Email = a.Email,
             Status = (int)a.Status,
             RoleUuid = a.RoleUuid,
-            RoleName = a.Role.Name,
-            RoleIsDefault = a.Role.IsDefault,
+            RoleName = role?.Name ?? string.Empty,
+            RoleIsDefault = role?.IsDefault ?? false,
         };
 
-        // Patient profile
+        // 2. Patient profile
         var pp = await _db.PatientProfiles.FirstOrDefaultAsync(p => p.AccountUuid == accountId);
         if (pp != null)
         {
@@ -94,16 +90,49 @@ public class AccountService : IAccountService
             };
         }
 
-        // Doctor profile
-        var dp = await _db.DoctorProfiles
-            .Include(d => d.Hospital)
-            .Include(d => d.DoctorDepartments).ThenInclude(dd => dd.Department)
-            .Include(d => d.DoctorSchedules).ThenInclude(ds => ds.TimeSlot)
-            .Include(d => d.ReviewDoctors)
-            .FirstOrDefaultAsync(d => d.AccountUuid == accountId);
+        // 3. Doctor profile — single query, no Include
+        var dp = await _db.DoctorProfiles.FirstOrDefaultAsync(d => d.AccountUuid == accountId);
 
         if (dp != null)
         {
+            var hospital = await _db.Hospitals.FirstOrDefaultAsync(h => h.Uuid == dp.HospitalGuid);
+
+            var departments = await (
+                from dd in _db.DoctorDepartments
+                join dept in _db.Departments on dd.DepartmentUuid equals dept.Uuid
+                where dd.DoctorUuid == dp.Uuid
+                select new DoctorDepartmentDto
+                {
+                    Uuid = dd.Uuid,
+                    DepartmentUuid = dd.DepartmentUuid,
+                    DepartmentName = dept.Name,
+                }).ToListAsync();
+
+            var schedules = await (
+                from ds in _db.DoctorSchedules
+                join ts in _db.TimeSlots on ds.TimeSlotUuid equals ts.Uuid
+                where ds.DoctorUuid == dp.Uuid
+                select new DoctorScheduleDto
+                {
+                    Uuid = ds.Uuid,
+                    TimeSlotUuid = ds.TimeSlotUuid,
+                    StartTime = ts.StartTime.ToString("HH:mm"),
+                    EndTime = ts.EndTime.ToString("HH:mm"),
+                }).ToListAsync();
+
+            var reviews = await _db.ReviewDoctors
+                .Where(r => r.DoctorUuid == dp.Uuid)
+                .Select(r => new ReviewDoctorDto
+                {
+                    Uuid = r.Uuid,
+                    Avatar = r.Avatar,
+                    Name = r.Name,
+                    Address = r.Address,
+                    Content = r.Content,
+                    NumberOfStar = r.NumberOfStar,
+                    IsFeatured = r.IsFeatured,
+                }).ToListAsync();
+
             dto.DoctorProfile = new DoctorProfileDto
             {
                 Uuid = dp.Uuid,
@@ -117,39 +146,16 @@ public class AccountService : IAccountService
                 Markdown = dp.Markdown,
                 ConsultationFee = dp.ConsultationFee,
                 HospitalGuid = dp.HospitalGuid,
-                HospitalName = dp.Hospital.Name,
-                Departments = dp.DoctorDepartments.Select(dd => new DoctorDepartmentDto
-                {
-                    Uuid = dd.Uuid,
-                    DepartmentUuid = dd.DepartmentUuid,
-                    DepartmentName = dd.Department.Name,
-                }).ToList(),
-                Schedules = dp.DoctorSchedules.Select(ds => new DoctorScheduleDto
-                {
-                    Uuid = ds.Uuid,
-                    TimeSlotUuid = ds.TimeSlotUuid,
-                    StartTime = ds.TimeSlot.StartTime.ToString("HH:mm"),
-                    EndTime = ds.TimeSlot.EndTime.ToString("HH:mm"),
-                }).ToList(),
-                Reviews = dp.ReviewDoctors.Select(r => new ReviewDoctorDto
-                {
-                    Uuid = r.Uuid,
-                    Avatar = r.Avatar,
-                    Name = r.Name,
-                    Address = r.Address,
-                    Content = r.Content,
-                    NumberOfStar = r.NumberOfStar,
-                    IsFeatured = r.IsFeatured,
-                }).ToList(),
+                HospitalName = hospital?.Name ?? string.Empty,
+                Departments = departments,
+                Schedules = schedules,
+                Reviews = reviews,
             };
         }
 
-        // Appointments where this account is either patient or doctor
-        var patientProfile = await _db.PatientProfiles.FirstOrDefaultAsync(p => p.AccountUuid == accountId);
-        var doctorProfile = await _db.DoctorProfiles.FirstOrDefaultAsync(d => d.AccountUuid == accountId);
-
-        var patientUuid = patientProfile?.Uuid;
-        var doctorUuid = doctorProfile?.Uuid;
+        // 4. Appointments
+        var patientUuid = pp?.Uuid;
+        var doctorUuid = dp?.Uuid;
 
         dto.Appointments = await _db.Appointments
             .Where(ap =>
@@ -177,7 +183,7 @@ public class AccountService : IAccountService
             })
             .ToListAsync();
 
-        // Prescriptions
+        // 5. Prescriptions
         dto.Prescriptions = await _db.Prescriptions
             .Where(p =>
                 (patientUuid.HasValue && p.PatientUuid == patientUuid.Value) ||
@@ -228,7 +234,6 @@ public class AccountService : IAccountService
         _db.Accounts.Add(account);
         await _db.SaveChangesAsync();
 
-        // If role is default (IsDefault), auto-create DoctorProfile
         if (role.IsDefault)
         {
             var doctorProfile = new Models.DoctorProfile
@@ -252,7 +257,6 @@ public class AccountService : IAccountService
         }
         else
         {
-            // Non-doctor role: auto-create PatientProfile
             var patientProfile = new Models.PatientProfile
             {
                 Uuid = Guid.NewGuid(),
@@ -291,26 +295,21 @@ public class AccountService : IAccountService
     public async Task DeleteAccountAsync(Guid accountId)
     {
         var account = await _db.Accounts
-            .Include(a => a.PatientProfile)
-            .Include(a => a.DoctorProfile)
             .FirstOrDefaultAsync(a => a.Uuid == accountId)
             ?? throw new Exception($"Account '{accountId}' not found.");
 
-        // Remove related profile if exists
-        if (account.PatientProfile != null)
-            _db.PatientProfiles.Remove(account.PatientProfile);
-        if (account.DoctorProfile != null)
+        var pp = await _db.PatientProfiles.FirstOrDefaultAsync(p => p.AccountUuid == accountId);
+        if (pp != null)
+            _db.PatientProfiles.Remove(pp);
+
+        var dp = await _db.DoctorProfiles.FirstOrDefaultAsync(d => d.AccountUuid == accountId);
+        if (dp != null)
         {
-            var dp = await _db.DoctorProfiles
-                .Include(d => d.DoctorDepartments)
-                .Include(d => d.DoctorSchedules)
-                .FirstOrDefaultAsync(d => d.Uuid == account.DoctorProfile.Uuid);
-            if (dp != null)
-            {
-                _db.DoctorDepartments.RemoveRange(dp.DoctorDepartments);
-                _db.DoctorSchedules.RemoveRange(dp.DoctorSchedules);
-                _db.DoctorProfiles.Remove(dp);
-            }
+            var doctorDepartments = await _db.DoctorDepartments.Where(dd => dd.DoctorUuid == dp.Uuid).ToListAsync();
+            var doctorSchedules = await _db.DoctorSchedules.Where(ds => ds.DoctorUuid == dp.Uuid).ToListAsync();
+            _db.DoctorDepartments.RemoveRange(doctorDepartments);
+            _db.DoctorSchedules.RemoveRange(doctorSchedules);
+            _db.DoctorProfiles.Remove(dp);
         }
 
         _db.Accounts.Remove(account);
@@ -319,12 +318,7 @@ public class AccountService : IAccountService
 
     public async Task<DoctorProfileDto> UpdateDoctorProfileAsync(Guid accountId, UpdateDoctorProfileDto dto)
     {
-        var dp = await _db.DoctorProfiles
-            .Include(d => d.Hospital)
-            .Include(d => d.DoctorDepartments).ThenInclude(dd => dd.Department)
-            .Include(d => d.DoctorSchedules).ThenInclude(ds => ds.TimeSlot)
-            .Include(d => d.ReviewDoctors)
-            .FirstOrDefaultAsync(d => d.AccountUuid == accountId)
+        var dp = await _db.DoctorProfiles.FirstOrDefaultAsync(d => d.AccountUuid == accountId)
             ?? throw new Exception($"Doctor profile for account '{accountId}' not found.");
 
         if (dto.Image != null) dp.Image = dto.Image;
@@ -341,6 +335,44 @@ public class AccountService : IAccountService
         _db.DoctorProfiles.Update(dp);
         await _db.SaveChangesAsync();
 
+        var hospital = await _db.Hospitals.FirstOrDefaultAsync(h => h.Uuid == dp.HospitalGuid);
+
+        var departments = await (
+            from dd in _db.DoctorDepartments
+            join dept in _db.Departments on dd.DepartmentUuid equals dept.Uuid
+            where dd.DoctorUuid == dp.Uuid
+            select new DoctorDepartmentDto
+            {
+                Uuid = dd.Uuid,
+                DepartmentUuid = dd.DepartmentUuid,
+                DepartmentName = dept.Name,
+            }).ToListAsync();
+
+        var schedules = await (
+            from ds in _db.DoctorSchedules
+            join ts in _db.TimeSlots on ds.TimeSlotUuid equals ts.Uuid
+            where ds.DoctorUuid == dp.Uuid
+            select new DoctorScheduleDto
+            {
+                Uuid = ds.Uuid,
+                TimeSlotUuid = ds.TimeSlotUuid,
+                StartTime = ts.StartTime.ToString("HH:mm"),
+                EndTime = ts.EndTime.ToString("HH:mm"),
+            }).ToListAsync();
+
+        var reviews = await _db.ReviewDoctors
+            .Where(r => r.DoctorUuid == dp.Uuid)
+            .Select(r => new ReviewDoctorDto
+            {
+                Uuid = r.Uuid,
+                Avatar = r.Avatar,
+                Name = r.Name,
+                Address = r.Address,
+                Content = r.Content,
+                NumberOfStar = r.NumberOfStar,
+                IsFeatured = r.IsFeatured,
+            }).ToListAsync();
+
         return new DoctorProfileDto
         {
             Uuid = dp.Uuid,
@@ -350,43 +382,20 @@ public class AccountService : IAccountService
             AverageStar = dp.AverageStar,
             Visit = dp.Visit,
             ViewDepartment = dp.ViewDepartment,
-                IsFeatured = dp.IsFeatured,
-                Markdown = dp.Markdown,
-                ConsultationFee = dp.ConsultationFee,
-                HospitalGuid = dp.HospitalGuid,
-            HospitalName = dp.Hospital.Name,
-            Departments = dp.DoctorDepartments.Select(dd => new DoctorDepartmentDto
-            {
-                Uuid = dd.Uuid,
-                DepartmentUuid = dd.DepartmentUuid,
-                DepartmentName = dd.Department.Name,
-            }).ToList(),
-            Schedules = dp.DoctorSchedules.Select(ds => new DoctorScheduleDto
-            {
-                Uuid = ds.Uuid,
-                TimeSlotUuid = ds.TimeSlotUuid,
-                StartTime = ds.TimeSlot.StartTime.ToString("HH:mm"),
-                EndTime = ds.TimeSlot.EndTime.ToString("HH:mm"),
-            }).ToList(),
-            Reviews = dp.ReviewDoctors.Select(r => new ReviewDoctorDto
-            {
-                Uuid = r.Uuid,
-                Avatar = r.Avatar,
-                Name = r.Name,
-                Address = r.Address,
-                Content = r.Content,
-                NumberOfStar = r.NumberOfStar,
-                IsFeatured = r.IsFeatured,
-            }).ToList(),
+            IsFeatured = dp.IsFeatured,
+            Markdown = dp.Markdown,
+            ConsultationFee = dp.ConsultationFee,
+            HospitalGuid = dp.HospitalGuid,
+            HospitalName = hospital?.Name ?? string.Empty,
+            Departments = departments,
+            Schedules = schedules,
+            Reviews = reviews,
         };
     }
 
     private async Task<AccountResponseDto> GetAccountResponseAsync(Guid accountId)
     {
         return await _db.Accounts
-            .Include(a => a.Role)
-            .Include(a => a.PatientProfile)
-            .Include(a => a.DoctorProfile)
             .Where(a => a.Uuid == accountId)
             .Select(a => new AccountResponseDto
             {
